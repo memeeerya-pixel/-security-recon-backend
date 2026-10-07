@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime
+from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Float
 from sqlalchemy.orm import declarative_base, sessionmaker
 from datetime import datetime
 import os
@@ -14,6 +14,7 @@ class ScanReport(Base):
     domain = Column(String(255), index=True)
     scan_type = Column(String(50))
     result = Column(Text)
+    cvss_score = Column(Float, default=0.0)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 Base.metadata.create_all(engine)
