@@ -62,6 +62,9 @@ def scan_dns(domain):
 def scan_subdomains(domain):
     try:
         r = requests.get(f"https://crt.sh/?q=%25.{domain}&output=json", timeout=20)
+        content_type = r.headers.get("Content-Type", "")
+        if "application/json" not in content_type and not r.text.strip().startswith(("[", "{")):
+            return {"error": "crt.sh أعاد رد غير JSON (ممكن حظر مؤقت). جرب لاحقاً."}
         data = r.json()
         subs = set()
         for entry in data:
@@ -71,7 +74,7 @@ def scan_subdomains(domain):
                     subs.add(name)
         return sorted(subs)[:100]
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": f"فشل جلب النطاقات الفرعية: {str(e)}"}
 
 # ---------- Tech Detect ----------
 SIGNATURES = {
