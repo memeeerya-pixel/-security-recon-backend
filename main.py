@@ -13,9 +13,8 @@ from auth import verify_api_key
 from db import SessionLocal, ScanReport
 import modules
 
-app = FastAPI(title="Security Recon Suite v3.0")
+app = FastAPI(title="Security Recon Suite v3.1")
 
-# Rate Limiting
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
@@ -36,7 +35,12 @@ class ScanRequest(BaseModel):
     bot_token: str = None
 
 def sanitize(domain):
-    return domain.strip().replace("https://","").replace("http://","").replace("www.","").split("/")[0]
+    """يقبل domain أو domain/path"""
+    cleaned = domain.strip().replace("https://","").replace("http://","").replace("www.","")
+    # نشيل الشرطة الأخيرة إذا موجودة
+    if cleaned.endswith("/"):
+        cleaned = cleaned[:-1]
+    return cleaned
 
 def save_report(domain, scan_type, result, cvss=0.0):
     db = SessionLocal()
@@ -48,7 +52,7 @@ def save_report(domain, scan_type, result, cvss=0.0):
 
 @app.get("/")
 def root():
-    return {"status": "ok", "version": "3.0"}
+    return {"status": "ok", "version": "3.1"}
 
 @app.post("/scan/headers")
 @limiter.limit("10/minute")
@@ -199,6 +203,8 @@ def s_security_txt(request: Request, req: ScanRequest, _=Depends(verify_api_key)
 def s_payment(request: Request, _=Depends(verify_api_key)):
     if not ALLOW_PAYMENT_TESTS:
         raise HTTPException(403, "Payment tests disabled. Set ALLOW_PAYMENT_TESTS=true for staging only.")
+    if "localhost" not in PAYMENT_TEST_URL and "staging" not in PAYMENT_TEST_URL and "127.0.0.1" not in PAYMENT_TEST_URL:
+        raise HTTPException(403, "Payment tests only allowed on localhost/staging.")
     res = modules.scan_payment(PAYMENT_TEST_URL)
     save_report("staging", "payment", res)
     return res
