@@ -1,6 +1,12 @@
 import requests, ssl, socket, datetime, threading, dns.resolver, time, re, base64, json as js
 
 # ============================================================
+# Helper: استخراج الدومين فقط (بدون مسار)
+# ============================================================
+def get_hostname(domain):
+    return domain.split("/")[0]
+
+# ============================================================
 # Helper: طلب آمن مع Retry
 # ============================================================
 def safe_request(url, method="GET", timeout=10, headers=None, allow_redirects=True, json_data=None, retries=2):
@@ -35,7 +41,7 @@ def safe_request(url, method="GET", timeout=10, headers=None, allow_redirects=Tr
     return {"error": "فشل بعد عدة محاولات"}
 
 # ============================================================
-# 1. Security Headers
+# 1. Security Headers (يدعم المسار)
 # ============================================================
 SECURITY_HEADERS = ["Strict-Transport-Security","Content-Security-Policy","X-Frame-Options","X-Content-Type-Options","Referrer-Policy","Permissions-Policy","Cross-Origin-Opener-Policy","Cross-Origin-Embedder-Policy"]
 
@@ -50,16 +56,18 @@ def scan_headers(domain):
     result["_server"] = r.headers.get("Server", "مخفي")
     result["_powered_by"] = r.headers.get("X-Powered-By", "مخفي")
     result["_status_code"] = r.status_code
+    result["_url_checked"] = f"https://{domain}"
     return result
 
 # ============================================================
-# 2. SSL Check
+# 2. SSL Check (يستخدم الدومين فقط)
 # ============================================================
 def scan_ssl(domain):
+    hostname = get_hostname(domain)
     try:
         ctx = ssl.create_default_context()
-        with ctx.wrap_socket(socket.socket(), server_hostname=domain) as s:
-            s.settimeout(10); s.connect((domain, 443))
+        with ctx.wrap_socket(socket.socket(), server_hostname=hostname) as s:
+            s.settimeout(10); s.connect((hostname, 443))
             cert = s.getpeercert(); proto = s.version()
         expiry = datetime.datetime.strptime(cert['notAfter'], '%b %d %H:%M:%S %Y %Z')
         days_left = (expiry - datetime.datetime.utcnow()).days
@@ -72,23 +80,25 @@ def scan_ssl(domain):
         return {"error": f"فشل فحص SSL: {str(e)}"}
 
 # ============================================================
-# 3. DNS
+# 3. DNS (يستخدم الدومين فقط)
 # ============================================================
 def scan_dns(domain):
+    hostname = get_hostname(domain)
     out = {}
     for rtype in ['A','AAAA','MX','TXT','NS','CNAME','SOA','CAA']:
         try:
-            ans = dns.resolver.resolve(domain, rtype, lifetime=5)
+            ans = dns.resolver.resolve(hostname, rtype, lifetime=5)
             out[rtype] = [str(a) for a in ans]
         except Exception:
             out[rtype] = None
     return out
 
 # ============================================================
-# 4. Subdomains
+# 4. Subdomains (يستخدم الدومين فقط)
 # ============================================================
 def scan_subdomains(domain):
-    res = safe_request(f"https://crt.sh/?q=%25.{domain}&output=json", timeout=25)
+    hostname = get_hostname(domain)
+    res = safe_request(f"https://crt.sh/?q=%25.{hostname}&output=json", timeout=25)
     if "error" in res: return {"error": res["error"]}
     r = res["response"]
     ct = r.headers.get("Content-Type", "")
@@ -104,7 +114,7 @@ def scan_subdomains(domain):
     return sorted(subs)[:100]
 
 # ============================================================
-# 5. Tech Detect
+# 5. Tech Detect (يدعم المسار)
 # ============================================================
 SIGNATURES = {"WordPress":["wp-content","wp-includes"],"React":["react","_next"],"Vue.js":["vue.js","__vue__"],"jQuery":["jquery"],"Bootstrap":["bootstrap"],"Cloudflare":["cloudflare"],"PHP":["php"],"Laravel":["laravel_session"],"Django":["csrftoken"],"Nginx":["nginx"],"Apache":["apache"]}
 
@@ -114,17 +124,18 @@ def scan_tech(domain):
     r = res["response"]
     combined = (r.text + " " + str(r.headers)).lower()
     tech = [name for name, sigs in SIGNATURES.items() if any(s in combined for s in sigs)]
-    return {"detected": tech,"server": r.headers.get("Server","unknown"),"powered_by": r.headers.get("X-Powered-By","unknown"),"status_code": r.status_code}
+    return {"detected": tech,"server": r.headers.get("Server","unknown"),"powered_by": r.headers.get("X-Powered-By","unknown"),"status_code": r.status_code,"url_checked": f"https://{domain}"}
 
 # ============================================================
-# 6. Exposed Files
+# 6. Exposed Files (يستخدم الدومين فقط - الملفات عادة في الروت)
 # ============================================================
 PATHS = ["/.env","/.git/config","/.git/HEAD","/.htaccess","/wp-config.php.bak","/config.php.bak","/wp-admin/","/phpmyadmin/","/admin/","/robots.txt","/sitemap.xml","/.well-known/security.txt","/backup.zip","/db.sql","/.DS_Store"]
 
 def scan_exposed(domain):
+    hostname = get_hostname(domain)
     out = {}
     for p in PATHS:
-        res = safe_request(f"https://{domain}{p}", method="HEAD", timeout=6, allow_redirects=False)
+        res = safe_request(f"https://{hostname}{p}", method="HEAD", timeout=6, allow_redirects=False)
         if "error" in res:
             out[p] = "خطأ في الطلب"; continue
         code = res["response"].status_code
@@ -136,7 +147,7 @@ def scan_exposed(domain):
     return out
 
 # ============================================================
-# 7. HTTP Methods
+# 7. HTTP Methods (يدعم المسار)
 # ============================================================
 def scan_http_methods(domain):
     res = safe_request(f"https://{domain}", method="OPTIONS", timeout=8)
@@ -147,7 +158,7 @@ def scan_http_methods(domain):
     return {"allowed_methods": methods,"dangerous_methods": dangerous,"status": "تحذير: طرق خطيرة مفعّلة" if dangerous else "آمن نسبياً"}
 
 # ============================================================
-# 8. Cookie Security
+# 8. Cookie Security (يدعم المسار)
 # ============================================================
 def scan_cookies(domain):
     res = safe_request(f"https://{domain}")
@@ -160,7 +171,7 @@ def scan_cookies(domain):
     return out
 
 # ============================================================
-# 9. CORS Check
+# 9. CORS Check (يدعم المسار)
 # ============================================================
 def scan_cors(domain):
     headers = {"Origin": "https://evil-example.com"}
@@ -178,10 +189,11 @@ def scan_cors(domain):
     return {"status": "لا يوجد CORS"}
 
 # ============================================================
-# 10. Open Redirect
+# 10. Open Redirect (يدعم المسار)
 # ============================================================
 def scan_open_redirect(domain):
-    payloads = [f"https://{domain}/?redirect=https://evil-example.com",f"https://{domain}/?url=https://evil-example.com",f"https://{domain}/?next=https://evil-example.com"]
+    hostname = get_hostname(domain)
+    payloads = [f"https://{hostname}/?redirect=https://evil-example.com",f"https://{hostname}/?url=https://evil-example.com",f"https://{hostname}/?next=https://evil-example.com"]
     findings = []
     for url in payloads:
         res = safe_request(url, timeout=6, allow_redirects=False)
@@ -194,7 +206,7 @@ def scan_open_redirect(domain):
     return {"status": "لا يوجد Open Redirect واضح"}
 
 # ============================================================
-# 11. JWT Analysis
+# 11. JWT Analysis (يدعم المسار)
 # ============================================================
 def scan_jwt(domain):
     res = safe_request(f"https://{domain}")
@@ -213,7 +225,7 @@ def scan_jwt(domain):
     return {"status": "لا يوجد JWT ظاهر في الرد"}
 
 # ============================================================
-# 12. Rate Limiting
+# 12. Rate Limiting (يدعم المسار)
 # ============================================================
 def scan_rate_limit(domain):
     statuses = []
@@ -261,7 +273,7 @@ def scan_telegram(bot_token=None):
     return {"bot": data["result"],"recommendations": ["فعّل Webhook مع secret_token","تحقق من initData في كل طلب","لا تخزن التوكن في الكود","استخدم HTTPS للـ Webhook"]}
 
 # ============================================================
-# 15. WAF Detection
+# 15. WAF Detection (يدعم المسار)
 # ============================================================
 def scan_waf(domain):
     res = safe_request(f"https://{domain}")
@@ -275,7 +287,7 @@ def scan_waf(domain):
     return {"waf_detected": wafs, "status": "يوجد WAF" if wafs else "لا يوجد WAF واضح"}
 
 # ============================================================
-# 16. Server Info Leak
+# 16. Server Info Leak (يدعم المسار)
 # ============================================================
 def scan_server_info(domain):
     res = safe_request(f"https://{domain}")
@@ -284,13 +296,14 @@ def scan_server_info(domain):
     return {"server": h.get("Server","مخفي"),"x_powered_by": h.get("X-Powered-By","مخفي"),"x_aspnet_version": h.get("X-AspNet-Version","مخفي"),"via": h.get("Via","مخفي")}
 
 # ============================================================
-# 17. Directory Listing
+# 17. Directory Listing (يستخدم الدومين فقط)
 # ============================================================
 def scan_directory_listing(domain):
+    hostname = get_hostname(domain)
     paths = ["/", "/images/", "/uploads/", "/files/", "/backup/", "/assets/"]
     out = {}
     for p in paths:
-        res = safe_request(f"https://{domain}{p}", timeout=6)
+        res = safe_request(f"https://{hostname}{p}", timeout=6)
         if "error" in res: continue
         text = res["response"].text.lower()
         if "index of /" in text or "directory listing" in text:
@@ -300,41 +313,44 @@ def scan_directory_listing(domain):
     return out
 
 # ============================================================
-# 18. Sensitive Files
+# 18. Sensitive Files (يستخدم الدومين فقط)
 # ============================================================
 def scan_sensitive_files(domain):
+    hostname = get_hostname(domain)
     files = ["/config.json","/config.php","/wp-config.php","/.aws/credentials","/credentials.json","/secrets.json","/database.yml"]
     out = {}
     for f in files:
-        res = safe_request(f"https://{domain}{f}", method="HEAD", timeout=6, allow_redirects=False)
+        res = safe_request(f"https://{hostname}{f}", method="HEAD", timeout=6, allow_redirects=False)
         if "error" in res: out[f] = "خطأ"; continue
         code = res["response"].status_code
         out[f] = "مكشوف" if code == 200 else "محمي" if code == 403 else "غير موجود"
     return out
 
 # ============================================================
-# 19. Email Security (SPF, DMARC)
+# 19. Email Security (يستخدم الدومين فقط)
 # ============================================================
 def scan_email_security(domain):
+    hostname = get_hostname(domain)
     out = {}
     try:
-        txt = dns.resolver.resolve(domain, 'TXT', lifetime=5)
+        txt = dns.resolver.resolve(hostname, 'TXT', lifetime=5)
         spf = [str(t) for t in txt if 'v=spf1' in str(t)]
         out['SPF'] = spf[0] if spf else "مفقود"
     except Exception:
         out['SPF'] = "خطأ"
     try:
-        dmarc = dns.resolver.resolve(f"_dmarc.{domain}", 'TXT', lifetime=5)
+        dmarc = dns.resolver.resolve(f"_dmarc.{hostname}", 'TXT', lifetime=5)
         out['DMARC'] = [str(t) for t in dmarc]
     except Exception:
         out['DMARC'] = "مفقود"
     return out
 
 # ============================================================
-# 20. Security.txt
+# 20. Security.txt (يستخدم الدومين فقط)
 # ============================================================
 def scan_security_txt(domain):
-    res = safe_request(f"https://{domain}/.well-known/security.txt", timeout=6)
+    hostname = get_hostname(domain)
+    res = safe_request(f"https://{hostname}/.well-known/security.txt", timeout=6)
     if "error" in res: return {"status": "خطأ في الطلب"}
     if res["response"].status_code == 200:
         return {"status": "موجود", "content": res["response"].text[:500]}
