@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
-import os, json
+import os, json, requests
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -13,7 +13,7 @@ from auth import verify_api_key
 from db import SessionLocal, ScanReport
 import modules
 
-app = FastAPI(title="Security Recon Suite v3.1")
+app = FastAPI(title="Security Recon Suite v3.2")
 
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
@@ -30,17 +30,18 @@ app.add_middleware(
 ALLOW_PAYMENT_TESTS = os.getenv("ALLOW_PAYMENT_TESTS", "false").lower() == "true"
 PAYMENT_TEST_URL = os.getenv("PAYMENT_TEST_URL", "http://localhost:8000")
 
+# ⚠️ ضع مفتاحك الجديد هنا بين علامات التنصيص ⚠️
+GEMINI_API_KEY = ""
+
 class ScanRequest(BaseModel):
     domain: str
     bot_token: str = None
 
+class QuizRequest(BaseModel):
+    text: str
+
 def sanitize(domain):
-    """يقبل domain أو domain/path"""
-    cleaned = domain.strip().replace("https://","").replace("http://","").replace("www.","")
-    # نشيل الشرطة الأخيرة إذا موجودة
-    if cleaned.endswith("/"):
-        cleaned = cleaned[:-1]
-    return cleaned
+    return domain.strip().replace("https://","").replace("http://","").replace("www.","").split("/")[0]
 
 def save_report(domain, scan_type, result, cvss=0.0):
     db = SessionLocal()
@@ -52,8 +53,45 @@ def save_report(domain, scan_type, result, cvss=0.0):
 
 @app.get("/")
 def root():
-    return {"status": "ok", "version": "3.1"}
+    return {"status": "ok", "version": "3.2"}
 
+# ============================================================
+# 🆕 حل الأسئلة بالذكاء الاصطناعي
+# ============================================================
+@app.post("/solve")
+@limiter.limit("30/minute")
+def solve_quiz(request: Request, q: QuizRequest):
+    if GEMINI_API_KEY == "" or "ضع_مفتاح" in GEMINI_API_KEY:
+        return {"answer": "مفتاح Gemini غير مفعل في السيرفر"}
+
+    # استخدام الموديل السريع
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    
+    prompt = f"أجب عن هذا السؤال بكلمة واحدة أو رقم فقط بدون أي شرح أو مقدمات: {q.text}"
+    
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"maxOutputTokens": 20, "temperature": 0.1}
+    }
+    
+    try:
+        response = requests.post(url, json=payload, timeout=10)
+        data = response.json()
+        
+        # استخراج النص
+        if "candidates" in data:
+            answer = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+            return {"answer": answer}
+        else:
+            # طباعة الخطأ للتصحيح
+            return {"answer": f"خطأ من جوجل: {data.get('error', {}).get('message', 'غير معروف')}"}
+            
+    except Exception as e:
+        return {"answer": f"خطأ في الاتصال: {str(e)}"}
+
+# ============================================================
+# الأدوات القديمة (فحص المواقع)
+# ============================================================
 @app.post("/scan/headers")
 @limiter.limit("10/minute")
 def s_headers(request: Request, req: ScanRequest, _=Depends(verify_api_key)):
@@ -202,7 +240,7 @@ def s_security_txt(request: Request, req: ScanRequest, _=Depends(verify_api_key)
 @limiter.limit("3/minute")
 def s_payment(request: Request, _=Depends(verify_api_key)):
     if not ALLOW_PAYMENT_TESTS:
-        raise HTTPException(403, "Payment tests disabled. Set ALLOW_PAYMENT_TESTS=true for staging only.")
+        raise HTTPException(403, "Payment tests disabled.")
     if "localhost" not in PAYMENT_TEST_URL and "staging" not in PAYMENT_TEST_URL and "127.0.0.1" not in PAYMENT_TEST_URL:
         raise HTTPException(403, "Payment tests only allowed on localhost/staging.")
     res = modules.scan_payment(PAYMENT_TEST_URL)
