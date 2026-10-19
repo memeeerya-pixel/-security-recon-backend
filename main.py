@@ -72,7 +72,7 @@ def solve_quiz(request: Request, q: QuizRequest):
     
     payload = {
         # هنا الموديل الجديد اللي رح يشتغل
-        "model": "meta-llama/llama-3.3-70b-instruct:free",
+        "model": "mistralai/mistral-7b-instruct:free",
         "messages": [
             {"role": "system", "content": "أنت مساعد يحل الأسئلة. أجب بكلمة واحدة أو رقم فقط بدون أي شرح أو مقدمات."},
             {"role": "user", "content": q.text}
