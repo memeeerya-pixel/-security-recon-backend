@@ -61,7 +61,7 @@ def root():
 @app.post("/solve")
 @limiter.limit("30/minute")
 def solve_quiz(request: Request, q: QuizRequest):
-    if OPENROUTER_API_KEY == "" or "هون_حط_المفتاح" in OPENROUTER_API_KEY:
+    if OPENROUTER_API_KEY == "":
         return {"answer": "مفتاح OpenRouter غير مفعل في السيرفر"}
 
     url = "https://openrouter.ai/api/v1/chat/completions"
