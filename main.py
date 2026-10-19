@@ -31,7 +31,7 @@ ALLOW_PAYMENT_TESTS = os.getenv("ALLOW_PAYMENT_TESTS", "false").lower() == "true
 PAYMENT_TEST_URL = os.getenv("PAYMENT_TEST_URL", "http://localhost:8000")
 
 # ⚠️ ضع مفتاحك الجديد هنا بين علامات التنصيص ⚠️
-GEMINI_API_KEY = "AQ.Ab8RN6Jmb2ZCNhbCMVBy-13pmFn5Me5m_mj4TV8MnA04Uht5-g"
+GEMINI_API_KEY = "AQ.Ab8RN6KoFZROAXv7u7sD7GEFtlXPn9lKfTci1Ymq-HklQh9SLA"
 
 class ScanRequest(BaseModel):
     domain: str
