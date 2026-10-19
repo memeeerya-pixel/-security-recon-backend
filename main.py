@@ -13,7 +13,7 @@ from auth import verify_api_key
 from db import SessionLocal, ScanReport
 import modules
 
-app = FastAPI(title="Security Recon Suite v3.2")
+app = FastAPI(title="Security Recon Suite v3.3")
 
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
@@ -30,8 +30,8 @@ app.add_middleware(
 ALLOW_PAYMENT_TESTS = os.getenv("ALLOW_PAYMENT_TESTS", "false").lower() == "true"
 PAYMENT_TEST_URL = os.getenv("PAYMENT_TEST_URL", "http://localhost:8000")
 
-# ⚠️ ضع مفتاحك الجديد هنا بين علامات التنصيص ⚠️
-GEMINI_API_KEY = "AQ.Ab8RN6KoFZROAXv7u7sD7GEFtlXPn9lKfTci1Ymq-HklQh9SLA"
+# المفتاح اللي طلبته
+OPENROUTER_API_KEY = "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"
 
 class ScanRequest(BaseModel):
     domain: str
@@ -53,38 +53,42 @@ def save_report(domain, scan_type, result, cvss=0.0):
 
 @app.get("/")
 def root():
-    return {"status": "ok", "version": "3.2"}
+    return {"status": "ok", "version": "3.3"}
 
 # ============================================================
-# 🆕 حل الأسئلة بالذكاء الاصطناعي
+# 🆕 حل الأسئلة بالذكاء الاصطناعي (عبر OpenRouter)
 # ============================================================
 @app.post("/solve")
 @limiter.limit("30/minute")
 def solve_quiz(request: Request, q: QuizRequest):
-    if GEMINI_API_KEY == "" or "ضع_مفتاح" in GEMINI_API_KEY:
-        return {"answer": "مفتاح Gemini غير مفعل في السيرفر"}
+    if OPENROUTER_API_KEY == "" or "ضع_مفتاح" in OPENROUTER_API_KEY:
+        return {"answer": "مفتاح OpenRouter غير مفعل في السيرفر"}
 
-    # استخدام الموديل السريع
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
-    
-    prompt = f"أجب عن هذا السؤال بكلمة واحدة أو رقم فقط بدون أي شرح أو مقدمات: {q.text}"
+    url = "https://openrouter.ai/api/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json"
+    }
     
     payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"maxOutputTokens": 20, "temperature": 0.1}
+        "model": "meta-llama/llama-3.3-70b-instruct:free",
+        "messages": [
+            {"role": "system", "content": "أنت مساعد يحل الأسئلة. أجب بكلمة واحدة أو رقم فقط بدون أي شرح أو مقدمات."},
+            {"role": "user", "content": q.text}
+        ],
+        "temperature": 0.1,
+        "max_tokens": 20
     }
     
     try:
-        response = requests.post(url, json=payload, timeout=10)
+        response = requests.post(url, headers=headers, json=payload, timeout=15)
         data = response.json()
         
-        # استخراج النص
-        if "candidates" in data:
-            answer = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+        if "choices" in data:
+            answer = data["choices"][0]["message"]["content"].strip()
             return {"answer": answer}
         else:
-            # طباعة الخطأ للتصحيح
-            return {"answer": f"خطأ من جوجل: {data.get('error', {}).get('message', 'غير معروف')}"}
+            return {"answer": f"خطأ من OpenRouter: {data.get('error', {}).get('message', 'غير معروف')}"}
             
     except Exception as e:
         return {"answer": f"خطأ في الاتصال: {str(e)}"}
