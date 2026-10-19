@@ -31,7 +31,7 @@ ALLOW_PAYMENT_TESTS = os.getenv("ALLOW_PAYMENT_TESTS", "false").lower() == "true
 PAYMENT_TEST_URL = os.getenv("PAYMENT_TEST_URL", "http://localhost:8000")
 
 # ⚠️⚠️⚠️ هون بدك تحط المفتاح اللي بعتّه أنت (اللي بيبدأ بـ sk-or-v1) ⚠️⚠️⚠️
-OPENROUTER_API_KEY = "هون_حط_المفتاح"
+OPENROUTER_API_KEY = "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"
 
 class ScanRequest(BaseModel):
     domain: str
@@ -61,7 +61,7 @@ def root():
 @app.post("/solve")
 @limiter.limit("30/minute")
 def solve_quiz(request: Request, q: QuizRequest):
-    if OPENROUTER_API_KEY == "" or "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" in OPENROUTER_API_KEY:
+    if OPENROUTER_API_KEY == "" or "هون_حط_المفتاح" in OPENROUTER_API_KEY:
         return {"answer": "مفتاح OpenRouter غير مفعل في السيرفر"}
 
     url = "https://openrouter.ai/api/v1/chat/completions"
