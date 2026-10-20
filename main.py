@@ -53,39 +53,27 @@ def root():
     return {"status": "ok", "version": "4.0"}
 
 # ============================================================
-# 🆕 حل الأسئلة بالذكاء الاصطناعي (Keyless - بدون مفتاح)
+# 🆕 حل الأسئلة بالذكاء الاصطناعي (بدون مفاتيح - Pollinations)
 # ============================================================
 @app.post("/solve")
 @limiter.limit("30/minute")
 def solve_quiz(request: Request, q: QuizRequest):
-    url = "https://hermes.ai.unturf.com/v1/chat/completions"
+    url = "https://text.pollinations.ai/"
     
     payload = {
-        "model": "turboderp/Qwen3.8-27B-exl3",
         "messages": [
-            {"role": "system", "content": "أنت مساعد يحل الأسئلة. أجب بكلمة واحدة أو رقم فقط بدون أي شرح أو مقدمات."},
+            {"role": "system", "content": "You are a quiz solver. Answer with ONLY the exact word or number. Do not explain."},
             {"role": "user", "content": q.text}
         ],
-        "temperature": 0.1,
-        "max_tokens": 20
+        "model": "openai"
     }
     
     try:
-        response = requests.post(url, json=payload, timeout=20)
-        data = response.json()
-        
-        # الحماية الجديدة عشان ما ينهار الكود
-        if "choices" in data and len(data["choices"]) > 0:
-            message = data["choices"][0].get("message", {})
-            content = message.get("content")
-            
-            if content:
-                return {"answer": content.strip()}
-            else:
-                return {"answer": "رد فارغ من المزود، جرب سؤال تاني"}
+        response = requests.post(url, json=payload, timeout=25)
+        if response.status_code == 200:
+            return {"answer": response.text.strip()}
         else:
-            return {"answer": f"خطأ من المزود: {data.get('error', {}).get('message', 'رد غير مفهوم')}"}
-            
+            return {"answer": f"خطأ من المزود: {response.status_code}"}
     except Exception as e:
         return {"answer": f"خطأ في الاتصال: {str(e)}"}
 
