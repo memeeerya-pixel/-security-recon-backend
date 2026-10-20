@@ -13,7 +13,7 @@ from auth import verify_api_key
 from db import SessionLocal, ScanReport
 import modules
 
-app = FastAPI(title="Security Recon Suite v5.1")
+app = FastAPI(title="Security Recon Suite v4.0")
 
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
@@ -50,42 +50,30 @@ def save_report(domain, scan_type, result, cvss=0.0):
 
 @app.get("/")
 def root():
-    return {"status": "ok", "version": "5.1"}
+    return {"status": "ok", "version": "4.0"}
 
 # ============================================================
-# 🆕 حل الأسئلة (KeylessAI - بدون مفتاح)
+# 🆕 حل الأسئلة بالذكاء الاصطناعي (النسخة الأصلية)
 # ============================================================
 @app.post("/solve")
 @limiter.limit("30/minute")
 def solve_quiz(request: Request, q: QuizRequest):
-    # KeylessAI: جسر بيجمع مزودين مجانيين وبيشتغل بدون مفتاح
-    url = "https://keylessai.thryx.workers.dev/v1/chat/completions"
+    url = "https://text.pollinations.ai/"
     
     payload = {
-        "model": "gpt-4o",
         "messages": [
             {"role": "system", "content": "Answer only:"},
             {"role": "user", "content": q.text}
         ],
-        "temperature": 0.1,
-        "max_tokens": 20
+        "model": "openai"
     }
     
     try:
-        # timeout=5 عشان ما نضيع وقت
-        response = requests.post(url, json=payload, timeout=5)
-        
+        response = requests.post(url, json=payload, timeout=15)
         if response.status_code == 200:
-            data = response.json()
-            if "choices" in data and len(data["choices"]) > 0:
-                return {"answer": data["choices"][0]["message"]["content"].strip()}
-            return {"answer": "رد غير مفهوم"}
+            return {"answer": response.text.strip()}
         else:
             return {"answer": f"خطأ من المزود: {response.status_code}"}
-            
-    except requests.exceptions.Timeout:
-        return {"answer": "⏳ تأخر المزود (أكثر من 5 ثواني). جرب سؤال تاني."}
-        
     except Exception as e:
         return {"answer": f"خطأ في الاتصال: {str(e)}"}
 
