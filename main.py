@@ -60,7 +60,6 @@ def root():
 def solve_quiz(request: Request, q: QuizRequest):
     url = "https://hermes.ai.unturf.com/v1/chat/completions"
     
-    # ما في مفتاح، وما في Authorization header
     payload = {
         "model": "turboderp/Qwen3.8-27B-exl3",
         "messages": [
@@ -72,15 +71,20 @@ def solve_quiz(request: Request, q: QuizRequest):
     }
     
     try:
-        # نرسل الطلب بدون رأس الحماية
-        response = requests.post(url, json=payload, timeout=15)
+        response = requests.post(url, json=payload, timeout=20)
         data = response.json()
         
-        if "choices" in data:
-            answer = data["choices"][0]["message"]["content"].strip()
-            return {"answer": answer}
+        # الحماية الجديدة عشان ما ينهار الكود
+        if "choices" in data and len(data["choices"]) > 0:
+            message = data["choices"][0].get("message", {})
+            content = message.get("content")
+            
+            if content:
+                return {"answer": content.strip()}
+            else:
+                return {"answer": "رد فارغ من المزود، جرب سؤال تاني"}
         else:
-            return {"answer": f"خطأ من المزود: {data.get('error', {}).get('message', 'غير معروف')}"}
+            return {"answer": f"خطأ من المزود: {data.get('error', {}).get('message', 'رد غير مفهوم')}"}
             
     except Exception as e:
         return {"answer": f"خطأ في الاتصال: {str(e)}"}
