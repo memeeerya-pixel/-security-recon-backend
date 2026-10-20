@@ -13,7 +13,7 @@ from auth import verify_api_key
 from db import SessionLocal, ScanReport
 import modules
 
-app = FastAPI(title="Security Recon Suite v4.1")
+app = FastAPI(title="Security Recon Suite v4.6")
 
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
@@ -50,31 +50,40 @@ def save_report(domain, scan_type, result, cvss=0.0):
 
 @app.get("/")
 def root():
-    return {"status": "ok", "version": "4.1"}
+    return {"status": "ok", "version": "4.6"}
 
 # ============================================================
-# 🆕 حل الأسئلة بالذكاء الاصطناعي (سريع جداً - Pollinations)
+# 🆕 حل الأسئلة (حد أقصى 5 ثواني - Timeout)
 # ============================================================
 @app.post("/solve")
 @limiter.limit("30/minute")
 def solve_quiz(request: Request, q: QuizRequest):
-    url = "https://text.pollinations.ai/"
+    url = "https://gen.pollinations.ai/v1/chat/completions"
     
-    # تعديلات السرعة: موديل mistral وبرومبت قصير جداً
     payload = {
+        "model": "openai",
         "messages": [
             {"role": "system", "content": "Answer only:"},
             {"role": "user", "content": q.text}
-        ],
-        "model": "mistral"
+        ]
     }
     
     try:
-        response = requests.post(url, json=payload, timeout=15)
+        # هنا السر: timeout=5 يعني يفصل إذا تأخر أكتر من 5 ثواني
+        response = requests.post(url, json=payload, timeout=5)
+        
         if response.status_code == 200:
-            return {"answer": response.text.strip()}
+            data = response.json()
+            if "choices" in data and len(data["choices"]) > 0:
+                return {"answer": data["choices"][0]["message"]["content"].strip()}
+            return {"answer": "رد غير مفهوم"}
         else:
             return {"answer": f"خطأ من المزود: {response.status_code}"}
+            
+    except requests.exceptions.Timeout:
+        # هالرسالة بتطلع إذا تجاوز الـ 5 ثواني
+        return {"answer": "⏳ تأخر المزود (أكثر من 5 ثواني). جرب سؤال تاني."}
+        
     except Exception as e:
         return {"answer": f"خطأ في الاتصال: {str(e)}"}
 
