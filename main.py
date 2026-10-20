@@ -60,20 +60,22 @@ def root():
 def solve_quiz(request: Request, q: QuizRequest):
     url = "https://text.pollinations.ai/"
     
+    # نصيغ السؤال كأنه إملاء، عشان يجاوب بالعربي غصب عنه
+    prompt_text = f"أجب عن هذا السؤال باللغة العربية بكلمة واحدة فقط بدون أي شرح: {q.text}"
+    
     payload = {
         "messages": [
-            # أمر صارم عشان يجاوب بنفس لغة السؤال وبكلمة وحدة
-            {"role": "system", "content": "You are a quiz solver. Answer with ONLY the exact word or number in the SAME language as the question. Do not explain. أجب بنفس لغة السؤال بكلمة واحدة فقط بدون أي شرح."},
-            {"role": "user", "content": q.text}
+            {"role": "user", "content": prompt_text}
         ],
         "model": "openai"
     }
     
     try:
-        # 6 ثواني كحد أقصى
         response = requests.post(url, json=payload, timeout=6)
         if response.status_code == 200:
             return {"answer": response.text.strip()}
+        elif response.status_code == 402:
+            return {"answer": "⏳ المزود طلب انتظار (402). استنى دقيقة وجرب."}
         else:
             return {"answer": f"خطأ من المزود: {response.status_code}"}
     except Exception as e:
