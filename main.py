@@ -13,7 +13,7 @@ from auth import verify_api_key
 from db import SessionLocal, ScanReport
 import modules
 
-app = FastAPI(title="Security Recon Suite v4.0")
+app = FastAPI(title="Security Recon Suite v4.1")
 
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
@@ -50,10 +50,10 @@ def save_report(domain, scan_type, result, cvss=0.0):
 
 @app.get("/")
 def root():
-    return {"status": "ok", "version": "4.0"}
+    return {"status": "ok", "version": "4.1"}
 
 # ============================================================
-# 🆕 حل الأسئلة بالذكاء الاصطناعي (بدون مفاتيح - Pollinations)
+# 🆕 حل الأسئلة بالذكاء الاصطناعي (يدعم العربية + 6 ثواني)
 # ============================================================
 @app.post("/solve")
 @limiter.limit("30/minute")
@@ -62,13 +62,15 @@ def solve_quiz(request: Request, q: QuizRequest):
     
     payload = {
         "messages": [
-            {"role": "system", "content": "You are a quiz solver. Answer with ONLY the exact word or number. Do not explain."},
+            # أمر صارم عشان يجاوب بنفس لغة السؤال وبكلمة وحدة
+            {"role": "system", "content": "You are a quiz solver. Answer with ONLY the exact word or number in the SAME language as the question. Do not explain. أجب بنفس لغة السؤال بكلمة واحدة فقط بدون أي شرح."},
             {"role": "user", "content": q.text}
         ],
         "model": "openai"
     }
     
     try:
+        # 6 ثواني كحد أقصى
         response = requests.post(url, json=payload, timeout=6)
         if response.status_code == 200:
             return {"answer": response.text.strip()}
