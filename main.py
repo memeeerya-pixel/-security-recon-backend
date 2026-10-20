@@ -69,13 +69,25 @@ def solve_quiz(request: Request, q: QuizRequest):
     }
     
     try:
-        response = requests.post(url, json=payload, timeout=25)
+        # ⬇️ هنا تم تعديل الوقت إلى 5 ثوانٍ فقط ⬇️
+        response = requests.post(url, json=payload, timeout=5)
+        
         if response.status_code == 200:
             return {"answer": response.text.strip()}
         else:
             return {"answer": f"خطأ من المزود: {response.status_code}"}
-    except Exception as e:
+            
+    except requests.exceptions.Timeout:
+        # في حال استغرق الخادم أكثر من 5 ثواني للرد
+        return {"answer": "انتهت مهلة الطلب (5 ثوانٍ)، الخادم بطيء حالياً. يرجى المحاولة لاحقاً."}
+        
+    except requests.exceptions.RequestException as e:
+        # في حال انقطاع الشبكة أو رفض الخادم الاتصال
         return {"answer": f"خطأ في الاتصال: {str(e)}"}
+        
+    except Exception as e:
+        # أي خطأ آخر غير متوقع (لضمان عدم ظهور خطأ غير معروف)
+        return {"answer": f"حدث خطأ غير متوقع: {str(e)}"}
 
 # ============================================================
 # الأدوات القديمة (فحص المواقع)
