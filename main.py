@@ -53,7 +53,7 @@ def root():
     return {"status": "ok", "version": "4.0"}
 
 # ============================================================
-# 🆕 حل الأسئلة بالذكاء الاصطناعي (النسخة الأصلية)
+# 🆕 حل الأسئلة بالذكاء الاصطناعي (بدون مفاتيح - Pollinations)
 # ============================================================
 @app.post("/solve")
 @limiter.limit("30/minute")
@@ -62,14 +62,14 @@ def solve_quiz(request: Request, q: QuizRequest):
     
     payload = {
         "messages": [
-            {"role": "system", "content": "Answer only:"},
+            {"role": "system", "content": "You are a quiz solver. Answer with ONLY the exact word or number. Do not explain."},
             {"role": "user", "content": q.text}
         ],
         "model": "openai"
     }
     
     try:
-        response = requests.post(url, json=payload, timeout=15)
+        response = requests.post(url, json=payload, timeout=25)
         if response.status_code == 200:
             return {"answer": response.text.strip()}
         else:
