@@ -13,7 +13,7 @@ from auth import verify_api_key
 from db import SessionLocal, ScanReport
 import modules
 
-app = FastAPI(title="Security Recon Suite v5.0")
+app = FastAPI(title="Security Recon Suite v5.1")
 
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
@@ -50,34 +50,19 @@ def save_report(domain, scan_type, result, cvss=0.0):
 
 @app.get("/")
 def root():
-    return {"status": "ok", "version": "5.0"}
+    return {"status": "ok", "version": "5.1"}
 
 # ============================================================
-# 🆕 حل الأسئلة (ذكي - بيجرب 3 مزودين مجانيين)
+# 🆕 حل الأسئلة (KeylessAI - بدون مفتاح)
 # ============================================================
 @app.post("/solve")
 @limiter.limit("30/minute")
 def solve_quiz(request: Request, q: QuizRequest):
-    # قائمة المزودين المجانيين (بدون مفاتيح)
-    providers = [
-        {
-            "name": "KeylessAI",
-            "url": "https://keylessai.thryx.workers.dev/v1/chat/completions",
-            "model": "gpt-4o-mini"
-        },
-        {
-            "name": "Kilo Gateway",
-            "url": "https://api.kilo.ai/api/gateway/chat/completions",
-            "model": "gpt-4o-mini"
-        },
-        {
-            "name": "Pollinations",
-            "url": "https://text.pollinations.ai/openai",
-            "model": "openai"
-        }
-    ]
+    # KeylessAI: جسر بيجمع مزودين مجانيين وبيشتغل بدون مفتاح
+    url = "https://keylessai.thryx.workers.dev/v1/chat/completions"
     
-    payload_base = {
+    payload = {
+        "model": "gpt-4o",
         "messages": [
             {"role": "system", "content": "Answer only:"},
             {"role": "user", "content": q.text}
@@ -86,29 +71,23 @@ def solve_quiz(request: Request, q: QuizRequest):
         "max_tokens": 20
     }
     
-    last_error = "جرب كل المزودين وفشلوا"
-    
-    for p in providers:
-        try:
-            payload = payload_base.copy()
-            payload["model"] = p["model"]
+    try:
+        # timeout=5 عشان ما نضيع وقت
+        response = requests.post(url, json=payload, timeout=5)
+        
+        if response.status_code == 200:
+            data = response.json()
+            if "choices" in data and len(data["choices"]) > 0:
+                return {"answer": data["choices"][0]["message"]["content"].strip()}
+            return {"answer": "رد غير مفهوم"}
+        else:
+            return {"answer": f"خطأ من المزود: {response.status_code}"}
             
-            # timeout=5 عشان ما نضيع وقت إذا المزود تأخر
-            response = requests.post(p["url"], json=payload, timeout=5)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if "choices" in data and len(data["choices"]) > 0:
-                    answer = data["choices"][0]["message"]["content"].strip()
-                    return {"answer": answer, "provider": p["name"]}
-            else:
-                last_error = f"خطأ {response.status_code} من {p['name']}"
-                
-        except Exception as e:
-            last_error = f"فشل الاتصال بـ {p['name']}"
-            continue
-            
-    return {"answer": f"❌ فشل كل المزودين: {last_error}"}
+    except requests.exceptions.Timeout:
+        return {"answer": "⏳ تأخر المزود (أكثر من 5 ثواني). جرب سؤال تاني."}
+        
+    except Exception as e:
+        return {"answer": f"خطأ في الاتصال: {str(e)}"}
 
 # ============================================================
 # الأدوات القديمة (فحص المواقع)
