@@ -70,7 +70,7 @@ def solve_quiz(request: Request, q: QuizRequest):
     
     try:
         # ⬇️ هنا تم تعديل الوقت إلى 5 ثوانٍ فقط ⬇️
-        response = requests.post(url, json=payload, timeout=5)
+        response = requests.post(url, json=payload, timeout=25)
         
         if response.status_code == 200:
             return {"answer": response.text.strip()}
