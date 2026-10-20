@@ -13,7 +13,7 @@ from auth import verify_api_key
 from db import SessionLocal, ScanReport
 import modules
 
-app = FastAPI(title="Security Recon Suite v4.0")
+app = FastAPI(title="Security Recon Suite v4.1")
 
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
@@ -50,44 +50,33 @@ def save_report(domain, scan_type, result, cvss=0.0):
 
 @app.get("/")
 def root():
-    return {"status": "ok", "version": "4.0"}
+    return {"status": "ok", "version": "4.1"}
 
 # ============================================================
-# 🆕 حل الأسئلة بالذكاء الاصطناعي (بدون مفاتيح - Pollinations)
+# 🆕 حل الأسئلة بالذكاء الاصطناعي (سريع جداً - Pollinations)
 # ============================================================
 @app.post("/solve")
 @limiter.limit("30/minute")
 def solve_quiz(request: Request, q: QuizRequest):
     url = "https://text.pollinations.ai/"
     
+    # تعديلات السرعة: موديل mistral وبرومبت قصير جداً
     payload = {
         "messages": [
-            {"role": "system", "content": "You are a quiz solver. Answer with ONLY the exact word or number. Do not explain."},
+            {"role": "system", "content": "Answer only:"},
             {"role": "user", "content": q.text}
         ],
-        "model": "openai"
+        "model": "mistral"
     }
     
     try:
-        # ⬇️ هنا تم تعديل الوقت إلى 5 ثوانٍ فقط ⬇️
-        response = requests.post(url, json=payload, timeout=25)
-        
+        response = requests.post(url, json=payload, timeout=15)
         if response.status_code == 200:
             return {"answer": response.text.strip()}
         else:
             return {"answer": f"خطأ من المزود: {response.status_code}"}
-            
-    except requests.exceptions.Timeout:
-        # في حال استغرق الخادم أكثر من 5 ثواني للرد
-        return {"answer": "انتهت مهلة الطلب (5 ثوانٍ)، الخادم بطيء حالياً. يرجى المحاولة لاحقاً."}
-        
-    except requests.exceptions.RequestException as e:
-        # في حال انقطاع الشبكة أو رفض الخادم الاتصال
-        return {"answer": f"خطأ في الاتصال: {str(e)}"}
-        
     except Exception as e:
-        # أي خطأ آخر غير متوقع (لضمان عدم ظهور خطأ غير معروف)
-        return {"answer": f"حدث خطأ غير متوقع: {str(e)}"}
+        return {"answer": f"خطأ في الاتصال: {str(e)}"}
 
 # ============================================================
 # الأدوات القديمة (فحص المواقع)
