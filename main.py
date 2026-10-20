@@ -13,7 +13,7 @@ from auth import verify_api_key
 from db import SessionLocal, ScanReport
 import modules
 
-app = FastAPI(title="Security Recon Suite v3.3")
+app = FastAPI(title="Security Recon Suite v4.0")
 
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
@@ -29,9 +29,6 @@ app.add_middleware(
 
 ALLOW_PAYMENT_TESTS = os.getenv("ALLOW_PAYMENT_TESTS", "false").lower() == "true"
 PAYMENT_TEST_URL = os.getenv("PAYMENT_TEST_URL", "http://localhost:8000")
-
-# ⚠️⚠️⚠️ هون بدك تحط المفتاح اللي بعتّه أنت (اللي بيبدأ بـ sk-or-v1) ⚠️⚠️⚠️
-OPENROUTER_API_KEY = "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"
 
 class ScanRequest(BaseModel):
     domain: str
@@ -53,26 +50,19 @@ def save_report(domain, scan_type, result, cvss=0.0):
 
 @app.get("/")
 def root():
-    return {"status": "ok", "version": "3.3"}
+    return {"status": "ok", "version": "4.0"}
 
 # ============================================================
-# 🆕 حل الأسئلة بالذكاء الاصطناعي (عبر OpenRouter)
+# 🆕 حل الأسئلة بالذكاء الاصطناعي (Keyless - بدون مفتاح)
 # ============================================================
 @app.post("/solve")
 @limiter.limit("30/minute")
 def solve_quiz(request: Request, q: QuizRequest):
-    if OPENROUTER_API_KEY == "":
-        return {"answer": "مفتاح OpenRouter غير مفعل في السيرفر"}
-
-    url = "https://openrouter.ai/api/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type": "application/json"
-    }
+    url = "https://hermes.ai.unturf.com/v1/chat/completions"
     
+    # ما في مفتاح، وما في Authorization header
     payload = {
-        # هنا الموديل الجديد اللي رح يشتغل
-        "model": "mistralai/mistral-7b-instruct:free",
+        "model": "turboderp/Qwen3.8-27B-exl3",
         "messages": [
             {"role": "system", "content": "أنت مساعد يحل الأسئلة. أجب بكلمة واحدة أو رقم فقط بدون أي شرح أو مقدمات."},
             {"role": "user", "content": q.text}
@@ -82,14 +72,15 @@ def solve_quiz(request: Request, q: QuizRequest):
     }
     
     try:
-        response = requests.post(url, headers=headers, json=payload, timeout=15)
+        # نرسل الطلب بدون رأس الحماية
+        response = requests.post(url, json=payload, timeout=15)
         data = response.json()
         
         if "choices" in data:
             answer = data["choices"][0]["message"]["content"].strip()
             return {"answer": answer}
         else:
-            return {"answer": f"خطأ من OpenRouter: {data.get('error', {}).get('message', 'غير معروف')}"}
+            return {"answer": f"خطأ من المزود: {data.get('error', {}).get('message', 'غير معروف')}"}
             
     except Exception as e:
         return {"answer": f"خطأ في الاتصال: {str(e)}"}
