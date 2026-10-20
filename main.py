@@ -69,7 +69,7 @@ def solve_quiz(request: Request, q: QuizRequest):
     }
     
     try:
-        response = requests.post(url, json=payload, timeout=25)
+        response = requests.post(url, json=payload, timeout=6)
         if response.status_code == 200:
             return {"answer": response.text.strip()}
         else:
